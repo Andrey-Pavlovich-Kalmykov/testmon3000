@@ -30,6 +30,8 @@ from testmon.testmon_core import (
 from testmon import configure
 from testmon.common import get_logger, get_system_packages
 
+from testmon.static_analyzer import static_analysis
+
 SURVEY_NOTIFICATION_INTERVAL = timedelta(days=28)
 
 logger = get_logger(__name__)
@@ -115,6 +117,15 @@ def pytest_addoption(parser):
         ),
     )
 
+    group.addoption(
+        "--testmon-static",
+        action="store_true",
+        dest="testmon_static",
+        help=(
+            "Perform static analysis."
+        ),
+    )
+
     parser.addini("environment_expression", "environment expression", default="")
     parser.addini(
         "testmon_ignore_dependencies",
@@ -175,12 +186,15 @@ def init_testmon_data(config: Config):
                 headers=[("x-api-key", tmnet_api_key)],
             )
 
+    static = config.getoption("testmon_static")
+
     testmon_data = TestmonData(
         rootdir=config.rootdir.strpath,
         database=rpc_proxy,
         environment=environment,
         system_packages=system_packages,
         readonly=get_running_as(config) == "worker",
+        static=static
     )
     testmon_data.determine_stable(bool(rpc_proxy))
     config.testmon_data = testmon_data
@@ -359,6 +373,8 @@ class TestmonCollect:
     def pytest_runtest_protocol(
         self, item, nextitem
     ):  # pylint: disable=unused-argument
+        if self.testmon_data.static:
+            static_analysis(self.testmon, item)
         self.testmon.start_testmon(item.nodeid, nextitem.nodeid if nextitem else None)
         result = yield
         if result.excinfo and issubclass(result.excinfo[0], BaseException):

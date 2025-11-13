@@ -165,6 +165,7 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         system_packages=None,
         python_version=None,
         readonly=False,
+        static=False,
     ):
         self.rootdir = rootdir
         self.environment = environment if environment else "default"
@@ -218,6 +219,8 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         self.stable_test_names = None
         self.stable_files = None
         self.failing_tests = None
+
+        self.static = static
 
     @property
     def new_db(self):
@@ -447,6 +450,8 @@ class TestmonCollector:
         self.check_stack = []
         self.is_started = False
         self._interrupted_at = None
+        self._parsed_modules = {}
+        self._static_lines = {}
 
     def start_cov(self):
         if not self.cov._started:
@@ -585,6 +590,13 @@ class TestmonCollector:
         for test_name in self.batched_test_names:
             if home_file(test_name) not in nodes_files_lines.setdefault(test_name, {}):
                 nodes_files_lines[test_name].setdefault(home_file(test_name), {1})
+
+            cov_files_dict: dict = nodes_files_lines.get(test_name, {})
+            for filename, lines in self._static_lines.get(test_name, {}).items():
+                cov_lines: set = cov_files_dict.get(filename, set())
+                cov_files_dict[filename] = lines | cov_lines
+            nodes_files_lines[test_name] = cov_files_dict
+
         return nodes_files_lines, files_lines
 
     def close(self):
