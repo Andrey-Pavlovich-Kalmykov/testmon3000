@@ -122,7 +122,20 @@ def pytest_addoption(parser):
         action="store_true",
         dest="testmon_static",
         help=(
-            "Perform static analysis."
+            "Perform static analysis. "
+            "Overridden by --testmon-static-file"
+        ),
+    )
+
+    group.addoption(
+        "--testmon-static-file",
+        action="store",
+        type=str,
+        dest="testmon_static_file",
+        default="",
+        help=(
+            "Path tp JSON file containing the result of a static analysis. "
+            "Overrides --testmon-static."
         ),
     )
 
@@ -187,6 +200,7 @@ def init_testmon_data(config: Config):
             )
 
     static = config.getoption("testmon_static")
+    static_file = config.getoption("testmon_static_file")
 
     testmon_data = TestmonData(
         rootdir=config.rootdir.strpath,
@@ -194,7 +208,8 @@ def init_testmon_data(config: Config):
         environment=environment,
         system_packages=system_packages,
         readonly=get_running_as(config) == "worker",
-        static=static
+        static=static,
+        static_file=static_file
     )
     testmon_data.determine_stable(bool(rpc_proxy))
     config.testmon_data = testmon_data
