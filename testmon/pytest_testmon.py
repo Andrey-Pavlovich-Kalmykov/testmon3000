@@ -156,6 +156,7 @@ def testmon_options(config):
         "testmon",
         "no-testmon",
         "environment_expression",
+        "testmon_static_file",
     ]:
         if config.getoption(label):
             result.append(label.replace("testmon_", ""))
@@ -238,6 +239,7 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
                     config.rootdir.strpath,
                     testmon_labels=testmon_options(config),
                     cov_plugin=cov_plugin,
+                    static_file=config.getoption("testmon_static_file")
                 ),
                 config.testmon_data,
                 running_as=get_running_as(config),
