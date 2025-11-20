@@ -119,10 +119,18 @@ def static_analysis(collector: TestmonCollector, item: Function):
                             collector.cov._check_include_omit_etc(de.module_path._str, None)])
 
     add_transitive_defs(collector, defs, defs)
-    files: dict = collector._static_lines.get(item.nodeid, {})
-    for de in defs:
-        relfilename = cached_relpath(de.module_path._str, collector.rootdir)
-        lines: set = files.get(relfilename, set())
-        lines.add(de.line)
-        files[relfilename] = lines
-    collector._static_lines[item.nodeid] = files
+    defs = list(filter(lambda de: isinstance(de.line, int), defs))
+    return defs
+
+def add_static_lines(collector: TestmonCollector, item: Function):
+    try:
+        defs = static_analysis(collector, item)
+        files: dict = collector._static_lines.get(item.nodeid, {})
+        for de in defs:
+            relfilename = cached_relpath(de.module_path._str, collector.rootdir)
+            lines: set = files.get(relfilename, set())
+            lines.add(de.line)
+            files[relfilename] = lines
+        collector._static_lines[item.nodeid] = files
+    except Exception:
+        pass

@@ -30,7 +30,7 @@ from testmon.testmon_core import (
 from testmon import configure
 from testmon.common import get_logger, get_system_packages
 
-from testmon.static_analyzer import static_analysis
+from testmon.static_analyzer import add_static_lines
 
 SURVEY_NOTIFICATION_INTERVAL = timedelta(days=28)
 
@@ -388,8 +388,8 @@ class TestmonCollect:
     def pytest_runtest_protocol(
         self, item, nextitem
     ):  # pylint: disable=unused-argument
-        if self.testmon_data.static:
-            static_analysis(self.testmon, item)
+        if self.testmon_data.static and self.testmon_data.static_file is None:
+            add_static_lines(self.testmon, item)
         self.testmon.start_testmon(item.nodeid, nextitem.nodeid if nextitem else None)
         result = yield
         if result.excinfo and issubclass(result.excinfo[0], BaseException):
