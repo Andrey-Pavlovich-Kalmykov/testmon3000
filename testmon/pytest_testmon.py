@@ -118,24 +118,26 @@ def pytest_addoption(parser):
     )
 
     group.addoption(
-        "--testmon-static",
-        action="store_true",
-        dest="testmon_static",
+        "--testmon-static-write-file",
+        action="store",
+        type=str,
+        dest="testmon_static_write_file",
+        default=None,
         help=(
-            "Perform static analysis. "
-            "Overridden by --testmon-static-file"
+            "Performs static analysis and saves its result to the given filename. "
+            "Overridden by --testmon-static-read-file"
         ),
     )
 
     group.addoption(
-        "--testmon-static-file",
+        "--testmon-static-read-file",
         action="store",
         type=str,
-        dest="testmon_static_file",
-        default="",
+        dest="testmon_static_read_file",
+        default=None,
         help=(
-            "Path tp JSON file containing the result of a static analysis. "
-            "Overrides --testmon-static."
+            "Path to JSON file containing the result of a static analysis. "
+            "Overrides --testmon-static-write-file."
         ),
     )
 
@@ -156,7 +158,7 @@ def testmon_options(config):
         "testmon",
         "no-testmon",
         "environment_expression",
-        "testmon_static_file",
+        "testmon_static_read_file",
     ]:
         if config.getoption(label):
             result.append(label.replace("testmon_", ""))
@@ -200,8 +202,8 @@ def init_testmon_data(config: Config):
                 headers=[("x-api-key", tmnet_api_key)],
             )
 
-    static = config.getoption("testmon_static")
-    static_file = config.getoption("testmon_static_file")
+    static_write_file = config.getoption("testmon_static_write_file")
+    static_read_file = config.getoption("testmon_static_read_file")
 
     testmon_data = TestmonData(
         rootdir=config.rootdir.strpath,
@@ -209,8 +211,8 @@ def init_testmon_data(config: Config):
         environment=environment,
         system_packages=system_packages,
         readonly=get_running_as(config) == "worker",
-        static=static,
-        static_file=static_file
+        static_write_file=static_write_file,
+        static_read_file=static_read_file
     )
     testmon_data.determine_stable(bool(rpc_proxy))
     config.testmon_data = testmon_data
@@ -239,7 +241,8 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
                     config.rootdir.strpath,
                     testmon_labels=testmon_options(config),
                     cov_plugin=cov_plugin,
-                    static_file=config.getoption("testmon_static_file")
+                    static_read_file=config.getoption("testmon_static_read_file"),
+                    static_write_file=config.getoption("testmon_static_write_file")
                 ),
                 config.testmon_data,
                 running_as=get_running_as(config),
@@ -390,8 +393,7 @@ class TestmonCollect:
     def pytest_runtest_protocol(
         self, item, nextitem
     ):  # pylint: disable=unused-argument
-        if self.testmon_data.static and self.testmon_data.static_file is None:
-            add_static_lines(self.testmon, item)
+        add_static_lines(self.testmon, item)
         self.testmon.start_testmon(item.nodeid, nextitem.nodeid if nextitem else None)
         result = yield
         if result.excinfo and issubclass(result.excinfo[0], BaseException):

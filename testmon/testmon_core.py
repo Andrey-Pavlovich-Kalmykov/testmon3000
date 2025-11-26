@@ -166,8 +166,8 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         system_packages=None,
         python_version=None,
         readonly=False,
-        static=False,
-        static_file=None,
+        static_write_file=None,
+        static_read_file=None,
     ):
         self.rootdir = rootdir
         self.environment = environment if environment else "default"
@@ -222,8 +222,8 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         self.stable_files = None
         self.failing_tests = None
 
-        self.static = static
-        self.static_file = static_file
+        self.static_write_file = static_write_file
+        self.static_read_file = static_read_file
 
     @property
     def new_db(self):
@@ -430,7 +430,8 @@ class TestmonCollector:
     coverage_stack: [Coverage] = []
 
     def __init__(
-        self, rootdir, testmon_labels=None, cov_plugin=None, static_file=None
+        self, rootdir, testmon_labels=None, cov_plugin=None,
+        static_read_file: None | str = None, static_write_file: None | str = None
     ):  # TODO remove cov_plugin
         try:
             from testmon.testmon_core import (  # pylint: disable=import-outside-toplevel
@@ -455,7 +456,8 @@ class TestmonCollector:
         self._interrupted_at = None
         self._parsed_modules = {}
         self._static_lines = {}
-        self._static_file = static_file
+        self._static_read_file = static_read_file
+        self._static_write_file = static_write_file
 
     def start_cov(self):
         if not self.cov._started:
@@ -623,13 +625,32 @@ class TestmonCollector:
             TestmonCollector.coverage_stack[-1].start()
 
     def check_static_file(self):
+        if self._static_read_file:
+            self.read_static_file()
+        elif self._static_write_file:
+            self.write_static_file()
+
+    def read_static_file(self):
         try:
-            with open(self._static_file, 'r') as file:
+            with open(self._static_read_file, 'r') as file:
                 data = json.load(file)
             for res in data.values():
                 for filename, lines in res.items():
                     res[filename] = set(lines)
             self._static_lines = data
+        except Exception:
+            pass
+
+    def write_static_file(self):
+        try:
+            with open(self._static_write_file, 'w') as file:
+                new_static_lines = {}
+                for test, res in sorted(self._static_lines.items()):
+                    new_res = {}
+                    for filename, lines in sorted(res.items()):
+                        new_res[filename] = sorted(list(lines))
+                    new_static_lines[test] = new_res
+                json.dump(new_static_lines, file, indent=4)
         except Exception:
             pass
 
