@@ -166,8 +166,6 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         system_packages=None,
         python_version=None,
         readonly=False,
-        static_write_file=None,
-        static_read_file=None,
     ):
         self.rootdir = rootdir
         self.environment = environment if environment else "default"
@@ -221,9 +219,6 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         self.stable_test_names = None
         self.stable_files = None
         self.failing_tests = None
-
-        self.static_write_file = static_write_file
-        self.static_read_file = static_read_file
 
     @property
     def new_db(self):
@@ -431,7 +426,7 @@ class TestmonCollector:
 
     def __init__(
         self, rootdir, testmon_labels=None, cov_plugin=None,
-        static_read_file: None | str = None, static_write_file: None | str = None
+        static_read_lines: dict = {}, static_write_file: None | str = None
     ):  # TODO remove cov_plugin
         try:
             from testmon.testmon_core import (  # pylint: disable=import-outside-toplevel
@@ -455,8 +450,7 @@ class TestmonCollector:
         self.is_started = False
         self._interrupted_at = None
         self._parsed_modules = {}
-        self._static_lines = {}
-        self._static_read_file = static_read_file
+        self._static_lines = static_read_lines
         self._static_write_file = static_write_file
 
     def start_cov(self):
@@ -593,7 +587,8 @@ class TestmonCollector:
         nodes_files_lines.pop(dont_include, None)
         self.batched_test_names.discard(dont_include)
         nodes_files_lines.pop("", None)
-        self.check_static_file()
+        if self._static_write_file:
+            self.write_static_file()
         for test_name in self.batched_test_names:
             if home_file(test_name) not in nodes_files_lines.setdefault(test_name, {}):
                 nodes_files_lines[test_name].setdefault(home_file(test_name), {1})
@@ -623,23 +618,6 @@ class TestmonCollector:
         self.cov = None
         if TestmonCollector.coverage_stack:
             TestmonCollector.coverage_stack[-1].start()
-
-    def check_static_file(self):
-        if self._static_read_file:
-            self.read_static_file()
-        elif self._static_write_file:
-            self.write_static_file()
-
-    def read_static_file(self):
-        try:
-            with open(self._static_read_file, 'r') as file:
-                data = json.load(file)
-            for res in data.values():
-                for filename, lines in res.items():
-                    res[filename] = set(lines)
-            self._static_lines = data
-        except Exception:
-            pass
 
     def write_static_file(self):
         try:
