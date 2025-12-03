@@ -110,14 +110,11 @@ def pytest_addoption(parser):
     )
 
     group.addoption(
-        "--testmon-static-write-file",
-        action="store",
-        type=str,
-        dest="testmon_static_write_file",
-        default=None,
+        "--testmon-static-analisys",
+        action="store_true",
+        dest="testmon_static_analisys",
         help=(
-            "Performs static analysis and saves its result to the given filename. "
-            "Overridden by --testmon-static-read-file"
+            "Performs static analysis. "
         ),
     )
 
@@ -129,7 +126,17 @@ def pytest_addoption(parser):
         default=None,
         help=(
             "Path to JSON file containing the result of a static analysis. "
-            "Overrides --testmon-static-write-file."
+        ),
+    )
+
+    group.addoption(
+        "--testmon-static-write-file",
+        action="store",
+        type=str,
+        dest="testmon_static_write_file",
+        default=None,
+        help=(
+            "Writes static analysis result to the given file. "
         ),
     )
 
@@ -150,7 +157,6 @@ def testmon_options(config):
         "testmon",
         "no-testmon",
         "environment_expression",
-        "testmon_static_read_file",
     ]:
         if config.getoption(label):
             result.append(label.replace("testmon_", ""))
@@ -228,6 +234,7 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
                     config.rootdir.strpath,
                     testmon_labels=testmon_options(config),
                     cov_plugin=cov_plugin,
+                    static_analisys=config.getoption("testmon_static_analisys"),
                     static_read_lines=read_static_file(config.getoption("testmon_static_read_file")),
                     static_write_file=config.getoption("testmon_static_write_file"),
                 ),

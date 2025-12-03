@@ -426,6 +426,7 @@ class TestmonCollector:
 
     def __init__(
         self, rootdir, testmon_labels=None, cov_plugin=None,
+        static_analisys: bool = False,
         static_read_lines: dict = {}, static_write_file: None | str = None
     ):  # TODO remove cov_plugin
         try:
@@ -450,6 +451,7 @@ class TestmonCollector:
         self.is_started = False
         self._interrupted_at = None
         self._parsed_modules = {}
+        self._static_analisys = static_analisys
         self._static_lines = static_read_lines
         self._static_write_file = static_write_file
 

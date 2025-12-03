@@ -127,7 +127,7 @@ def static_analysis(collector: TestmonCollector, item: Function):
 
 def add_static_lines(collector: TestmonCollector, item: Function):
     try:
-        if not collector._static_write_file:
+        if not collector._static_analisys:
             return
         defs = static_analysis(collector, item)
         files: dict = collector._static_lines.get(item.nodeid, {})
