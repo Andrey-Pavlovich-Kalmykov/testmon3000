@@ -30,10 +30,13 @@ class FunctionParser(ast.NodeVisitor):
 class VariableCollector(ast.NodeVisitor):
     def __init__(self):
         self.read_variables = set()
+        self.inner_variables = set()
     
     def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load):
+        if isinstance(node.ctx, ast.Load) and node not in self.inner_variables:
             self.read_variables.add(node)
+        elif isinstance(node.ctx, ast.Store) and node not in self.read_variables:
+            self.inner_variables.add(node)
         self.generic_visit(node)
     
     def visit_Attribute(self, node):
