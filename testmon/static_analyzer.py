@@ -41,27 +41,32 @@ class VariableCollector(ast.NodeVisitor):
             self.read_variables.add(node)
 
 def parse_module(module_path):
-    functions: dict[str, ast.FunctionDef] = {}
     with open(module_path, 'r') as file:
         source = file.read()
     parsed = ast.parse(source)
     
+    functions: dict[str, ast.FunctionDef] = {}
     for node in parsed.body:
         if isinstance(node, ast.FunctionDef):
             functions[node.name] = node
-    
-    return parsed, functions
+
+    stmts: dict[int, ast.stmt] = {}
+    for node in ast.walk(parsed):
+        if isinstance(node, ast.stmt) and hasattr(node, 'lineno'):
+            stmts[node.lineno] = node
+
+    return parsed, functions, stmts
 
 def check_module(collector: TestmonCollector, module_name: str):
     relfilename = cached_relpath(module_name, collector.rootdir)
 
     if relfilename not in collector._parsed_modules:
-        parsed_module, functions = parse_module(module_name)
+        parsed_module, functions, stmts = parse_module(module_name)
         script = jedi.Script(path=module_name)
-        collector._parsed_modules[relfilename] = (parsed_module, functions, script)
+        collector._parsed_modules[relfilename] = (parsed_module, functions, stmts, script)
     else:
-        parsed_module, functions, script = collector._parsed_modules[relfilename]
-    return parsed_module, functions, script
+        parsed_module, functions, stmts, script = collector._parsed_modules[relfilename]
+    return parsed_module, functions, stmts, script
 
 def parse_function_from_module(tree: ast.Module, functions: dict[str, ast.FunctionDef], function_name: str):
     function = functions.get(function_name, None)
@@ -71,12 +76,6 @@ def parse_function_from_module(tree: ast.Module, functions: dict[str, ast.Functi
     function_parser.visit(tree)
 
     return function_parser.get_function_vars()
-
-def get_stmt_by_lineno(tree: ast.Module, target_lineno: int):
-    for node in ast.walk(tree):
-        if isinstance(node, ast.stmt) and hasattr(node, 'lineno') and node.lineno == target_lineno:
-            return node
-    return None
 
 def get_defs(script: jedi.Script, vars: list[ast.Name | ast.Attribute]):
     return [script.goto(line=rep.lineno,\
@@ -88,9 +87,9 @@ def get_defs(script: jedi.Script, vars: list[ast.Name | ast.Attribute]):
 def add_transitive_defs(collector: TestmonCollector, curr_defs: set[JediName], old_defs: set[JediName]):
     new_defs: set[JediName] = set()
     for name in curr_defs:
-        parsed_module, _, script = check_module(collector, name.module_path)
+        _, _, stmts, script = check_module(collector, name.module_path)
 
-        stmt = get_stmt_by_lineno(parsed_module, name.line)
+        stmt = stmts.get(name.line, None)
         if stmt is not None:
             variable_collector = VariableCollector()
             variable_collector.visit(stmt)
@@ -113,7 +112,7 @@ def static_analysis(collector: TestmonCollector, item: Function):
     if module is None:
         return
 
-    parsed_module, functions, script = check_module(collector, module.__file__)
+    parsed_module, functions, _, script = check_module(collector, module.__file__)
     vars = parse_function_from_module(parsed_module, functions, item.name)
     defs: List[List[JediName]] = get_defs(script=script, vars=vars)
 
