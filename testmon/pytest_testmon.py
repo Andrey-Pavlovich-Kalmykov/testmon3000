@@ -2,33 +2,27 @@
 """
 Main module of testmon pytest plugin.
 """
+import json
+import os
 import time
 import xmlrpc.client
-import os
-
 from collections import defaultdict
 from datetime import date, timedelta
-
 from pathlib import Path
-import pytest
 
-from _pytest.config import ExitCode, Config
+import pytest
+from _pytest.config import Config, ExitCode
 from _pytest.terminal import TerminalReporter
 
-from testmon.configure import TmConf
-
-from testmon.testmon_core import (
-    TestmonCollector,
-    eval_environment,
-    TestmonData,
-    home_file,
-    TestmonException,
-    get_test_execution_class_name,
-    get_test_execution_module_name,
-    cached_relpath,
-)
 from testmon import configure
 from testmon.common import get_logger, get_system_packages
+from testmon.configure import TmConf
+from testmon.static_analyzer import add_static_lines
+from testmon.testmon_core import (TestmonCollector, TestmonData,
+                                  TestmonException, cached_relpath,
+                                  eval_environment,
+                                  get_test_execution_class_name,
+                                  get_test_execution_module_name, home_file)
 
 SURVEY_NOTIFICATION_INTERVAL = timedelta(days=28)
 
@@ -112,6 +106,37 @@ def pytest_addoption(parser):
         dest="tmnet",
         help=(
             "This is used for internal beta. Please don't use. You can go to https://www.testmon.net/ to register."
+        ),
+    )
+
+    group.addoption(
+        "--testmon-static-analisys",
+        action="store_true",
+        dest="testmon_static_analisys",
+        help=(
+            "Performs static analysis. "
+        ),
+    )
+
+    group.addoption(
+        "--testmon-static-read-file",
+        action="store",
+        type=str,
+        dest="testmon_static_read_file",
+        default=None,
+        help=(
+            "Path to JSON file containing the result of a static analysis. "
+        ),
+    )
+
+    group.addoption(
+        "--testmon-static-write-file",
+        action="store",
+        type=str,
+        dest="testmon_static_write_file",
+        default=None,
+        help=(
+            "Writes static analysis result to the given file. "
         ),
     )
 
@@ -209,6 +234,9 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
                     config.rootdir.strpath,
                     testmon_labels=testmon_options(config),
                     cov_plugin=cov_plugin,
+                    static_analisys=config.getoption("testmon_static_analisys"),
+                    static_read_lines=read_static_file(config.getoption("testmon_static_read_file")),
+                    static_write_file=config.getoption("testmon_static_write_file"),
                 ),
                 config.testmon_data,
                 running_as=get_running_as(config),
@@ -222,9 +250,8 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
 def pytest_configure(config):
     coverage_stack = None
     try:
-        from tmnet.testmon_core import (  # pylint: disable=import-outside-toplevel
-            Testmon as UberTestmon,
-        )
+        from tmnet.testmon_core import \
+            Testmon as UberTestmon  # pylint: disable=import-outside-toplevel
 
         coverage_stack = UberTestmon.coverage_stack
     except ImportError:
@@ -359,6 +386,7 @@ class TestmonCollect:
     def pytest_runtest_protocol(
         self, item, nextitem
     ):  # pylint: disable=unused-argument
+        add_static_lines(self.testmon, item)
         self.testmon.start_testmon(item.nodeid, nextitem.nodeid if nextitem else None)
         result = yield
         if result.excinfo and issubclass(result.excinfo[0], BaseException):
@@ -561,3 +589,14 @@ class TestmonSelect:
 class FakeItemFromTestmon:  # pylint: disable=too-few-public-methods
     def __init__(self, config):
         self.config = config
+
+def read_static_file(static_read_file: str):
+    try:
+        with open(static_read_file, 'r') as file:
+            data = json.load(file)
+        for res in data.values():
+            for filename, lines in res.items():
+                res[filename] = set(lines)
+        return data
+    except Exception:
+        return {}

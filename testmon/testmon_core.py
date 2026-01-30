@@ -1,3 +1,4 @@
+import json
 import hashlib
 import os
 import random
@@ -424,7 +425,9 @@ class TestmonCollector:
     coverage_stack: [Coverage] = []
 
     def __init__(
-        self, rootdir, testmon_labels=None, cov_plugin=None
+        self, rootdir, testmon_labels=None, cov_plugin=None,
+        static_analisys: bool = False,
+        static_read_lines: dict = {}, static_write_file: None | str = None
     ):  # TODO remove cov_plugin
         try:
             from testmon.testmon_core import (  # pylint: disable=import-outside-toplevel
@@ -447,6 +450,10 @@ class TestmonCollector:
         self.check_stack = []
         self.is_started = False
         self._interrupted_at = None
+        self._parsed_modules = {}
+        self._static_analisys = static_analisys
+        self._static_lines = static_read_lines
+        self._static_write_file = static_write_file
 
     def start_cov(self):
         if not self.cov._started:
@@ -582,9 +589,18 @@ class TestmonCollector:
         nodes_files_lines.pop(dont_include, None)
         self.batched_test_names.discard(dont_include)
         nodes_files_lines.pop("", None)
+        if self._static_write_file:
+            self.write_static_file()
         for test_name in self.batched_test_names:
             if home_file(test_name) not in nodes_files_lines.setdefault(test_name, {}):
                 nodes_files_lines[test_name].setdefault(home_file(test_name), {1})
+
+            cov_files_dict: dict = nodes_files_lines.get(test_name, {})
+            for filename, lines in self._static_lines.get(test_name, {}).items():
+                cov_lines: set = cov_files_dict.get(filename, set())
+                cov_files_dict[filename] = lines | cov_lines
+            nodes_files_lines[test_name] = cov_files_dict
+
         return nodes_files_lines, files_lines
 
     def close(self):
@@ -604,6 +620,19 @@ class TestmonCollector:
         self.cov = None
         if TestmonCollector.coverage_stack:
             TestmonCollector.coverage_stack[-1].start()
+
+    def write_static_file(self):
+        try:
+            with open(self._static_write_file, 'w') as file:
+                new_static_lines = {}
+                for test, res in sorted(self._static_lines.items()):
+                    new_res = {}
+                    for filename, lines in sorted(res.items()):
+                        new_res[filename] = sorted(list(lines))
+                    new_static_lines[test] = new_res
+                json.dump(new_static_lines, file, indent=4)
+        except Exception:
+            pass
 
 
 def eval_environment(environment, **kwargs):

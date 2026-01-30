@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "pytest>=5,<9",
     "coverage>=6,<8",
+    "jedi>=0.19",
 ]
 
 # specify testmon and tmserver as packages of this project
